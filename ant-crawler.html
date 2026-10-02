@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ant Crawler</title>
+<style>
+:root{--bg:#fff;--fg:#202122;--link:#3366cc;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0b0f;--fg:#ddd;--link:#8ab4ff}}
+:root[data-theme="dark"]{--bg:#0b0b0f;--fg:#ddd;--link:#8ab4ff}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,serif;padding:16px;max-width:700px}
+a{color:var(--link);text-decoration:none}
+a.done{opacity:.55}
+a.glitch{font-family:monospace;color:#e08a2c}
+canvas{position:fixed;inset:0;pointer-events:none}
+</style>
+</head>
+<body>
+<h1>Ants</h1>
+<p>Ants are <a href="#">eusocial insects</a> of the family <a href="#">Formicidae</a>, in the order <a href="#">Hymenoptera</a>. They live in <a href="#">colonies</a> that range from a few dozen individuals to millions, with a body divided into a <a href="#">head</a>, a <a href="#">thorax</a> and an <a href="#">abdomen</a>.</p>
+<p>Most colonies are led by a <a href="#">queen</a>, with <a href="#">workers</a> that forage and tend the young. Ants communicate through <a href="#">pheromones</a> and follow chemical <a href="#">trails</a> to food. Others, such as <a href="#">leafcutter ants</a> and <a href="#">army ants</a>, farm <a href="#">fungus</a> or hunt in huge columns. Subfamilies include <a href="#">Myrmicinae</a>, <a href="#">Formicinae</a> and the <a href="#">Dorylinae</a>.</p>
+<h2>External links</h2>
+<ul>
+<li><a href="#">List of field guides to ants</a></li>
+<li><a href="#">Online videos of leafcutter ants</a></li>
+<li><a href="#">The Ants of the Arid Southwest</a></li>
+<li><a href="#">Record breaking achievements by ants</a></li>
+</ul>
+<p>Scroll or wait: when every visible link is visited, the ant scrolls down and starts a new sweep. Tap the page to restart.</p>
+<div style="height:900px"></div>
+<canvas id="c"></canvas>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+function resize(){const d=devicePixelRatio||1;cv.width=innerWidth*d;cv.height=innerHeight*d;ctx.setTransform(d,0,0,d,0,0)}
+resize();addEventListener('resize',resize);
+
+const BODY='#c0492b',LEG='#c0492b',ACCENT='#e08a2c';
+const ant={x:innerWidth/2,y:innerHeight/2,vx:0,vy:0,heading:0};
+const L1=20,L2=26,N=6,REACH=34,STEP=26;
+// six legs: three per side, attached at the thorax
+const legs=[...Array(N)].map((_,i)=>{
+  const side=i<N/2?-1:1,k=i%(N/2);
+  const ang=side*(0.7+k*0.65)+(side<0?Math.PI:0);
+  return {ang,fx:ant.x,fy:ant.y,tx:ant.x,ty:ant.y,side};
+});
+
+const visited=new Set();let target=null;
+function pickTarget(){
+  const vis=[...document.querySelectorAll('a')].filter(a=>{
+    const r=a.getBoundingClientRect();return r.top>0&&r.bottom<innerHeight&&!visited.has(a)});
+  if(!vis.length){visited.clear();document.querySelectorAll('a').forEach(a=>a.classList.remove('done'));scrollBy({top:260,behavior:'smooth'});if(scrollY+innerHeight>=document.body.scrollHeight-20)scrollTo({top:0,behavior:'smooth'});target=null;return}
+  vis.sort((a,b)=>dist(a)-dist(b));target=vis[0];
+}
+function center(a){const r=a.getBoundingClientRect();return[r.left+r.width/2,r.top+r.height/2]}
+function dist(a){const[x,y]=center(a);return Math.hypot(x-ant.x,y-ant.y)}
+function glitch(a){
+  const orig=a.textContent,chars='ᚠᚢᚦᚨᚱ§¤Ж╬0123';
+  a.classList.add('glitch');
+  a.textContent=[...orig].map(()=>chars[Math.random()*chars.length|0]).join('');
+  setTimeout(()=>{a.textContent=orig;a.classList.remove('glitch');a.classList.add('done')},500);
+}
+addEventListener('click',()=>{visited.clear();document.querySelectorAll('a').forEach(a=>a.classList.remove('done'));target=null});
+
+function ik(hx,hy,fx,fy,side){
+  let dx=fx-hx,dy=fy-hy,d=Math.min(Math.hypot(dx,dy),L1+L2-0.5);
+  const base=Math.atan2(dy,dx),a=Math.acos(Math.max(-1,Math.min(1,(L1*L1+d*d-L2*L2)/(2*L1*d))));
+  const ka=base+a*side;return[hx+Math.cos(ka)*L1,hy+Math.sin(ka)*L1];
+}
+
+function turnToward(cur,want,rate){
+  let diff=Math.atan2(Math.sin(want-cur),Math.cos(want-cur));
+  return cur+diff*rate;
+}
+
+function frame(t){
+  if(!target||!document.contains(target))pickTarget();
+  if(target){
+    const[tx,ty]=center(target);
+    const dx=tx-ant.x,dy=ty-ant.y,d=Math.hypot(dx,dy);
+    ant.vx+=(dx/d||0)*0.35;ant.vy+=(dy/d||0)*0.35;
+    ant.vx*=0.9;ant.vy*=0.9;
+    ant.x+=ant.vx;ant.y+=ant.vy;
+    if(d<14){visited.add(target);glitch(target);target=null}
+  }
+  // smooth heading so the body doesn't snap around when slow
+  if(Math.hypot(ant.vx,ant.vy)>0.2)ant.heading=turnToward(ant.heading,Math.atan2(ant.vy,ant.vx),0.15);
+  const heading=ant.heading;
+
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+  // highlight box
+  if(target){const r=target.getBoundingClientRect();ctx.strokeStyle=ACCENT;ctx.lineWidth=1.5;ctx.strokeRect(r.left-3,r.top-2,r.width+6,r.height+4)}
+
+  // legs
+  ctx.strokeStyle=LEG;ctx.lineWidth=1.5;ctx.lineJoin='round';
+  legs.forEach(l=>{
+    const a=l.ang+heading,hx=ant.x,hy=ant.y;
+    const rx=hx+Math.cos(a)*REACH+ant.vx*8,ry=hy+Math.sin(a)*REACH+ant.vy*8;
+    if(Math.hypot(l.fx-rx,l.fy-ry)>STEP){l.tx=rx;l.ty=ry}
+    l.fx+=(l.tx-l.fx)*0.3;l.fy+=(l.ty-l.fy)*0.3;
+    const[kx,ky]=ik(hx,hy,l.fx,l.fy,l.side);
+    ctx.beginPath();ctx.moveTo(hx,hy);ctx.lineTo(kx,ky);ctx.lineTo(l.fx,l.fy);ctx.stroke();
+    ctx.fillStyle=ACCENT;ctx.beginPath();ctx.arc(l.fx,l.fy,2,0,7);ctx.fill();
+  });
+
+  // body: abdomen, thorax, head + wiggling antennae
+  const w1=Math.sin(t/110)*3,w2=Math.cos(t/90)*3;
+  ctx.save();ctx.translate(ant.x,ant.y);ctx.rotate(heading);
+  ctx.strokeStyle=LEG;ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(12,-2);ctx.lineTo(20,-6+w1);ctx.lineTo(27,-6+w2*2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(12,2);ctx.lineTo(20,6-w2);ctx.lineTo(27,6-w1*2);ctx.stroke();
+  ctx.fillStyle=BODY;
+  ctx.beginPath();ctx.ellipse(-14,0,9,6,0,0,Math.PI*2);ctx.fill();   // abdomen
+  ctx.beginPath();ctx.ellipse(0,0,6,4,0,0,Math.PI*2);ctx.fill();     // thorax
+  ctx.beginPath();ctx.ellipse(10,0,5,4.5,0,0,Math.PI*2);ctx.fill();  // head
+  ctx.strokeStyle=BODY;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(-6,0);ctx.lineTo(-4,0);ctx.stroke();    // waist
+  // mandibles
+  ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(14,-2);ctx.lineTo(18,-1);ctx.moveTo(14,2);ctx.lineTo(18,1);ctx.stroke();
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
